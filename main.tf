@@ -7,9 +7,21 @@ terraform {
   }
 }
 
+variable "client_id" {
+  type = string
+}
+
 variable "client_secret" {
   type      = string
   sensitive = true
+}
+
+variable "tenant_id" {
+  type = string
+}
+
+variable "subscription_id" {
+  type = string
 }
 
 variable "location" {
@@ -33,10 +45,10 @@ locals {
 
 provider "azurerm" {
   features {}
-  client_id       = "71d61b9c-20f4-4082-8095-55a701919a61"
+  client_id       = var.client_id
   client_secret   = var.client_secret
-  tenant_id       = "72f988bf-86f1-41af-91ab-2d7cd011db47"
-  subscription_id = "6f3a143b-51cc-4a89-aa5a-3c98bb3f5e46"
+  tenant_id       = var.tenant_id
+  subscription_id = var.subscription_id
 }
 
 resource "azurerm_resource_group" "main" {
