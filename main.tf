@@ -50,19 +50,43 @@ resource "azurerm_resource_group" "main" {
 }
 
 resource "azurerm_kubernetes_cluster" "main" {
-  name                = "aks-${local.resource_suffix}"
-  location            = var.location
-  resource_group_name = azurerm_resource_group.main.name
-  dns_prefix          = "${var.project}-${var.environment}"
+  name                      = "aks-${local.resource_suffix}"
+  location                  = var.location
+  resource_group_name       = azurerm_resource_group.main.name
+  dns_prefix                = "${var.project}-${var.environment}"
+  sku_tier                  = "Paid"
+  automatic_channel_upgrade = "node-image"
 
   identity {
     type = "SystemAssigned"
   }
 
   default_node_pool {
-    name       = "default" # 1-11 Linux, 1-6 Windows
-    vm_size    = "Standard_DS2_v2"
-    node_count = 3
+    name                         = "default" # 1-11 Linux, 1-6 Windows
+    vm_size                      = "Standard_DS2_v2"
+    enable_auto_scaling          = true
+    min_count                    = 3
+    max_count                    = 6
+    availability_zones           = ["1", "2", "3"]
+    only_critical_addons_enabled = true
+  }
+}
+
+resource "azurerm_kubernetes_cluster_node_pool" "main" {
+  name                  = "main"
+  kubernetes_cluster_id = azurerm_kubernetes_cluster.main.id
+  vm_size               = "Standard_F4s_v2"
+  enable_auto_scaling   = true
+  min_count             = 2
+  max_count             = 4
+  max_pods              = 10
+
+  node_labels = {
+    "contoso.com" = "app"
+  }
+
+  upgrade_settings {
+    max_surge = "33%"
   }
 }
 
