@@ -24,6 +24,10 @@ variable "subscription_id" {
   type = string
 }
 
+variable "principal_id" {
+  type = string
+}
+
 variable "location" {
   type    = string
   default = "westeurope"
@@ -82,6 +86,16 @@ resource "azurerm_kubernetes_cluster" "main" {
     availability_zones           = ["1", "2", "3"]
     only_critical_addons_enabled = true
   }
+
+  role_based_access_control {
+    enabled = true
+
+    azure_active_directory {
+      managed                = true
+      azure_rbac_enabled     = true
+      admin_group_object_ids = []
+    }
+  }
 }
 
 resource "azurerm_kubernetes_cluster_node_pool" "main" {
@@ -100,6 +114,12 @@ resource "azurerm_kubernetes_cluster_node_pool" "main" {
   upgrade_settings {
     max_surge = "33%"
   }
+}
+
+resource "azurerm_role_assignment" "aks_rbac_reader" {
+  role_definition_name = "Azure Kubernetes Service RBAC Reader"
+  scope                = azurerm_kubernetes_cluster.main.id
+  principal_id         = var.principal_id
 }
 
 output "command" {
