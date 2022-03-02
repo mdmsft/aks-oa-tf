@@ -65,6 +65,24 @@ resource "azurerm_resource_group" "main" {
   }
 }
 
+resource "azurerm_log_analytics_workspace" "main" {
+  name                = "log-${local.resource_suffix}"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.main.name
+}
+
+resource "azurerm_storage_account" "main" {
+  name                      = "st${var.project}${var.environment}${var.location}"
+  location                  = var.location
+  resource_group_name       = azurerm_resource_group.main.name
+  account_replication_type  = "LRS"
+  account_tier              = "Standard"
+  access_tier               = "Cool"
+  allow_blob_public_access  = false
+  enable_https_traffic_only = true
+  min_tls_version           = "TLS1_2"
+}
+
 resource "azurerm_kubernetes_cluster" "main" {
   name                      = "aks-${local.resource_suffix}"
   location                  = var.location
@@ -97,6 +115,10 @@ resource "azurerm_kubernetes_cluster" "main" {
       admin_group_object_ids = []
     }
   }
+
+  oms_agent {
+    log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
+  }
 }
 
 resource "azurerm_kubernetes_cluster_node_pool" "main" {
@@ -114,6 +136,32 @@ resource "azurerm_kubernetes_cluster_node_pool" "main" {
 
   upgrade_settings {
     max_surge = "33%"
+  }
+}
+
+resource "azurerm_monitor_diagnostic_setting" "aks" {
+  name               = "default"
+  target_resource_id = azurerm_kubernetes_cluster.main.id
+  storage_account_id = azurerm_storage_account.main.id
+
+  dynamic "log" {
+    for_each = [
+      "kube-apiserver",
+      "kube-audit",
+      "kube-audit-admin",
+      "kube-controller-manager",
+      "kube-scheduler"
+    ]
+
+    content {
+      category = log.value
+      enabled  = true
+
+      retention_policy {
+        enabled = true
+        days    = 1
+      }
+    }
   }
 }
 
