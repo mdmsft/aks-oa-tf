@@ -72,6 +72,7 @@ resource "azurerm_kubernetes_cluster" "main" {
   dns_prefix                = "${var.project}-${var.environment}"
   sku_tier                  = "Paid"
   automatic_channel_upgrade = "node-image"
+  azure_policy_enabled      = true
 
   identity {
     type = "SystemAssigned"
@@ -117,9 +118,22 @@ resource "azurerm_kubernetes_cluster_node_pool" "main" {
 }
 
 resource "azurerm_role_assignment" "aks_rbac_reader" {
-  role_definition_name = "Azure Kubernetes Service RBAC Reader"
+  role_definition_name = "Azure Kubernetes Service RBAC Writer"
   scope                = azurerm_kubernetes_cluster.main.id
   principal_id         = var.principal_id
+}
+
+resource "azurerm_resource_group_policy_assignment" "main" {
+  policy_definition_id = "/providers/Microsoft.Authorization/policySetDefinitions/a8640138-9b0a-4a28-b8cb-1666c838647d"
+  name                 = "k8s-pod-security-baseline-standards-for-linux-based-workloads"
+  resource_group_id    = azurerm_resource_group.main.id
+  parameters           = <<PARAMETERS
+  {
+    "effect": {
+      "value": "deny"
+    }
+  }
+  PARAMETERS
 }
 
 output "command" {
