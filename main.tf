@@ -4,7 +4,16 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "2.98.0"
     }
+    kubernetes = {
+      source  = "hashicorp/kubernetes"
+      version = "2.8.0"
+    }
   }
+}
+
+provider "kubernetes" {
+  config_path    = "~/.kube/config"
+  config_context = local.context_name
 }
 
 variable "client_id" {
@@ -43,8 +52,15 @@ variable "environment" {
   default = "dev"
 }
 
+variable "address_space" {
+  type    = string
+  default = "10.10.0.0/16"
+}
 locals {
-  resource_suffix = "${var.project}-${var.environment}-${var.location}"
+  resource_suffix        = "${var.project}-${var.environment}-${var.location}"
+  context_name           = "${var.project}-${var.environment}"
+  azure_secret_name      = "azure-secret"
+  persistent_volume_name = "pv-azure-file"
 }
 
 provider "azurerm" {
@@ -88,6 +104,20 @@ resource "azurerm_storage_share" "main" {
   storage_account_name = azurerm_storage_account.main.name
 }
 
+resource "azurerm_virtual_network" "main" {
+  name                = "vnet-${local.resource_suffix}"
+  location            = var.location
+  resource_group_name = azurerm_resource_group.main.name
+  address_space       = [var.address_space]
+}
+
+resource "azurerm_subnet" "aks" {
+  name                 = "snet-aks"
+  virtual_network_name = azurerm_virtual_network.main.name
+  resource_group_name  = azurerm_resource_group.main.name
+  address_prefixes     = [cidrsubnet(var.address_space, 8, 0)]
+}
+
 resource "azurerm_kubernetes_cluster" "main" {
   name                      = "aks-${local.resource_suffix}"
   location                  = var.location
@@ -109,6 +139,7 @@ resource "azurerm_kubernetes_cluster" "main" {
     max_count                    = 6
     availability_zones           = ["1", "2", "3"]
     only_critical_addons_enabled = true
+    vnet_subnet_id               = azurerm_subnet.aks.id
   }
 
   role_based_access_control {
@@ -124,6 +155,10 @@ resource "azurerm_kubernetes_cluster" "main" {
   oms_agent {
     log_analytics_workspace_id = azurerm_log_analytics_workspace.main.id
   }
+
+  network_profile {
+    network_plugin = "azure"
+  }
 }
 
 resource "azurerm_kubernetes_cluster_node_pool" "main" {
@@ -135,6 +170,7 @@ resource "azurerm_kubernetes_cluster_node_pool" "main" {
   max_count             = 4
   max_pods              = 10
   availability_zones    = ["1", "2", "3"]
+  vnet_subnet_id        = azurerm_subnet.aks.id
 
   upgrade_settings {
     max_surge = "33%"
@@ -202,14 +238,84 @@ resource "azurerm_role_assignment" "aks_disk_pool_operator" {
   principal_id         = azurerm_kubernetes_cluster.main.identity.0.principal_id
 }
 
-output "command" {
-  value = "az aks get-credentials --name ${azurerm_kubernetes_cluster.main.name} --resource-group ${azurerm_resource_group.main.name} --context ${azurerm_kubernetes_cluster.main.dns_prefix}"
+resource "azurerm_role_assignment" "aks_network_contributor" {
+  role_definition_name = "Network Contributor"
+  scope                = azurerm_subnet.aks.id
+  principal_id         = azurerm_kubernetes_cluster.main.identity.0.principal_id
+}
+
+resource "null_resource" "get_credentials" {
+  depends_on = [
+    azurerm_kubernetes_cluster.main
+  ]
+
+  provisioner "local-exec" {
+    command = "az aks get-credentials --name ${azurerm_kubernetes_cluster.main.name} --resource-group ${azurerm_resource_group.main.name} --context ${local.context_name} --overwrite-existing"
+  }
+}
+
+resource "null_resource" "convert_kubeconfig" {
+  depends_on = [
+    null_resource.get_credentials
+  ]
+
+  provisioner "local-exec" {
+    command = "kubelogin convert-kubeconfig -l azurecli"
+  }
+}
+
+resource "kubernetes_secret_v1" "azure_secret" {
+  depends_on = [
+    null_resource.convert_kubeconfig
+  ]
+
+  metadata {
+    name = local.azure_secret_name
+  }
+
+  data = {
+    azurestorageaccountname = azurerm_storage_account.main.name
+    azurestorageaccountkey  = azurerm_storage_account.main.primary_access_key
+  }
+}
+
+resource "kubernetes_persistent_volume_v1" "azure_file" {
+  depends_on = [
+    kubernetes_secret_v1.azure_secret
+  ]
+
+  metadata {
+    name = local.persistent_volume_name
+  }
+
+  spec {
+    capacity = {
+      storage = "1Ti"
+    }
+
+    access_modes                     = ["ReadWriteMany"]
+    persistent_volume_reclaim_policy = "Retain"
+
+    persistent_volume_source {
+      csi {
+        driver        = "file.csi.azure.com"
+        read_only     = false
+        volume_handle = md5(local.persistent_volume_name)
+
+        volume_attributes = {
+          resourceGroup = azurerm_resource_group.main.name
+          shareName     = azurerm_storage_share.main.name
+        }
+
+        node_stage_secret_ref {
+          name      = kubernetes_secret_v1.azure_secret.metadata.0.name
+          namespace = kubernetes_secret_v1.azure_secret.metadata.0.namespace
+        }
+      }
+    }
+  }
 }
 
 output "disk_id" {
   value = azurerm_managed_disk.main.id
-}
-
-output "storage_account_name" {
-  value = azurerm_storage_account.main.name
 }
