@@ -83,6 +83,11 @@ resource "azurerm_storage_account" "main" {
   min_tls_version           = "TLS1_2"
 }
 
+resource "azurerm_storage_share" "main" {
+  name                 = "main"
+  storage_account_name = azurerm_storage_account.main.name
+}
+
 resource "azurerm_kubernetes_cluster" "main" {
   name                      = "aks-${local.resource_suffix}"
   location                  = var.location
@@ -129,10 +134,7 @@ resource "azurerm_kubernetes_cluster_node_pool" "main" {
   min_count             = 2
   max_count             = 4
   max_pods              = 10
-
-  node_labels = {
-    "contoso.com" = "app"
-  }
+  availability_zones    = ["1", "2", "3"]
 
   upgrade_settings {
     max_surge = "33%"
@@ -166,7 +168,7 @@ resource "azurerm_monitor_diagnostic_setting" "aks" {
 }
 
 resource "azurerm_role_assignment" "aks_rbac_reader" {
-  role_definition_name = "Azure Kubernetes Service RBAC Writer"
+  role_definition_name = "Azure Kubernetes Service RBAC Cluster Admin"
   scope                = azurerm_kubernetes_cluster.main.id
   principal_id         = var.principal_id
 }
@@ -184,6 +186,30 @@ resource "azurerm_resource_group_policy_assignment" "main" {
   PARAMETERS
 }
 
+resource "azurerm_managed_disk" "main" {
+  name                 = "disk-${local.resource_suffix}"
+  location             = var.location
+  resource_group_name  = azurerm_resource_group.main.name
+  storage_account_type = "StandardSSD_LRS"
+  create_option        = "Empty"
+  disk_size_gb         = 64
+  zones                = ["1"]
+}
+
+resource "azurerm_role_assignment" "aks_disk_pool_operator" {
+  role_definition_name = "Disk Pool Operator"
+  scope                = azurerm_managed_disk.main.id
+  principal_id         = azurerm_kubernetes_cluster.main.identity.0.principal_id
+}
+
 output "command" {
   value = "az aks get-credentials --name ${azurerm_kubernetes_cluster.main.name} --resource-group ${azurerm_resource_group.main.name} --context ${azurerm_kubernetes_cluster.main.dns_prefix}"
+}
+
+output "disk_id" {
+  value = azurerm_managed_disk.main.id
+}
+
+output "storage_account_name" {
+  value = azurerm_storage_account.main.name
 }

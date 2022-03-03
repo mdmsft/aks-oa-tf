@@ -1,0 +1,57 @@
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvc-azurefile
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: azurefile-csi-premium
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+spec:
+  containers:
+  - image: nginx:alpine
+    name: nginx
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 250m
+        memory: 256Mi
+    volumeMounts:
+      - name: azure
+        mountPath: /mnt/azure
+  volumes:
+    - name: azure
+      persistentVolumeClaim:
+        claimName: pvc-azurefile
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-copy
+spec:
+  containers:
+  - image: nginx:alpine
+    name: nginx
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 250m
+        memory: 256Mi
+    volumeMounts:
+      - name: azure
+        mountPath: /mnt/azure
+  volumes:
+    - name: azure
+      persistentVolumeClaim:
+        claimName: pvc-azurefile

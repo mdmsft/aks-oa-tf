@@ -1,0 +1,52 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: pv-azuredisk
+spec:
+  capacity:
+    storage: 32Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  csi:
+    driver: disk.csi.azure.com
+    readOnly: false
+    volumeHandle: /subscriptions/6f3a143b-51cc-4a89-aa5a-3c98bb3f5e46/resourceGroups/rg-reykjavik-dev-westeurope/providers/Microsoft.Compute/disks/disk-reykjavik-dev-westeurope
+    volumeAttributes:
+      fsType: ext4
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: pvc-azuredisk
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 32Gi
+  volumeName: pv-azuredisk
+  storageClassName: ""
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+spec:
+  containers:
+  - image: nginx:alpine
+    name: nginx
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 250m
+        memory: 256Mi
+    volumeMounts:
+      - name: azure
+        mountPath: /mnt/azure
+  volumes:
+    - name: azure
+      persistentVolumeClaim:
+        claimName: pvc-azuredisk
