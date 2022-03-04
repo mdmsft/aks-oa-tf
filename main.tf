@@ -115,7 +115,14 @@ resource "azurerm_subnet" "aks" {
   name                 = "snet-aks"
   virtual_network_name = azurerm_virtual_network.main.name
   resource_group_name  = azurerm_resource_group.main.name
-  address_prefixes     = [cidrsubnet(var.address_space, 8, 0)]
+  address_prefixes     = [cidrsubnet(var.address_space, 8, 0)] # 10.10.0.0/24
+}
+
+resource "azurerm_subnet" "agw" {
+  name                 = "snet-agw"
+  virtual_network_name = azurerm_virtual_network.main.name
+  resource_group_name  = azurerm_resource_group.main.name
+  address_prefixes     = [cidrsubnet(var.address_space, 8, 1)] # 10.10.1.0/24
 }
 
 resource "azurerm_kubernetes_cluster" "main" {
@@ -158,6 +165,10 @@ resource "azurerm_kubernetes_cluster" "main" {
 
   network_profile {
     network_plugin = "azure"
+  }
+
+  ingress_application_gateway {
+    gateway_id = azurerm_application_gateway.main.id
   }
 }
 
@@ -244,9 +255,19 @@ resource "azurerm_role_assignment" "aks_network_contributor" {
   principal_id         = azurerm_kubernetes_cluster.main.identity.0.principal_id
 }
 
+resource "azurerm_role_assignment" "agw" {
+  for_each = {
+    "Contributor" = azurerm_application_gateway.main.id
+    "Reader"      = azurerm_resource_group.main.id
+  }
+  scope                = each.value
+  role_definition_name = each.key
+  principal_id         = azurerm_kubernetes_cluster.main.addon_profile[0].ingress_application_gateway[0].ingress_application_gateway_identity[0].object_id
+}
+
 resource "null_resource" "get_credentials" {
   depends_on = [
-    azurerm_kubernetes_cluster.main
+    azurerm_kubernetes_cluster_node_pool.main
   ]
 
   provisioner "local-exec" {
