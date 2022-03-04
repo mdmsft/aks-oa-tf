@@ -9,6 +9,13 @@ terraform {
       version = "2.8.0"
     }
   }
+
+  backend "azurerm" {
+    resource_group_name  = "mdmsft"
+    storage_account_name = "mdmsft"
+    container_name       = "tfstate"
+    key                  = "reykjavik"
+  }
 }
 
 provider "kubernetes" {
@@ -16,26 +23,26 @@ provider "kubernetes" {
   config_context = local.context_name
 }
 
-variable "client_id" {
-  type = string
-}
+# variable "client_id" {
+#   type = string
+# }
 
-variable "client_secret" {
-  type      = string
-  sensitive = true
-}
+# variable "client_secret" {
+#   type      = string
+#   sensitive = true
+# }
 
-variable "tenant_id" {
-  type = string
-}
+# variable "tenant_id" {
+#   type = string
+# }
 
-variable "subscription_id" {
-  type = string
-}
+# variable "subscription_id" {
+#   type = string
+# }
 
-variable "principal_id" {
-  type = string
-}
+# variable "principal_id" {
+#   type = string
+# }
 
 variable "location" {
   type    = string
@@ -56,6 +63,7 @@ variable "address_space" {
   type    = string
   default = "10.10.0.0/16"
 }
+
 locals {
   resource_suffix        = "${var.project}-${var.environment}-${var.location}"
   context_name           = "${var.project}-${var.environment}"
@@ -65,10 +73,10 @@ locals {
 
 provider "azurerm" {
   features {}
-  client_id       = var.client_id
-  client_secret   = var.client_secret
-  tenant_id       = var.tenant_id
-  subscription_id = var.subscription_id
+  # client_id       = var.client_id
+  # client_secret   = var.client_secret
+  # tenant_id       = var.tenant_id
+  # subscription_id = var.subscription_id
 }
 
 resource "azurerm_resource_group" "main" {
@@ -165,6 +173,7 @@ resource "azurerm_kubernetes_cluster" "main" {
 
   network_profile {
     network_plugin = "azure"
+    network_policy = "azure"
   }
 
   ingress_application_gateway {
@@ -346,11 +355,11 @@ resource "azurerm_container_registry" "main" {
   anonymous_pull_enabled = false
 }
 
-# resource "azurerm_role_assignment" "aks_acr_pull" {
-#   role_definition_name = "AcrPull"
-#   scope                = azurerm_container_registry.main.id
-#   principal_id         = azurerm_kubernetes_cluster.main.kubelet_identity.0.object_id
-# }
+resource "azurerm_role_assignment" "aks_acr_pull" {
+  role_definition_name = "AcrPull"
+  scope                = azurerm_container_registry.main.id
+  principal_id         = azurerm_kubernetes_cluster.main.kubelet_identity.0.object_id
+}
 
 output "disk_id" {
   value = azurerm_managed_disk.main.id
