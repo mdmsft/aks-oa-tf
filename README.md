@@ -7,3 +7,8 @@ kubelogin convert-kubeconfig -l azurecli
 az storage account keys list --resource-group rg-... --account-name st... --query '[0].value' -o tsv
 kubectl create secret generic azure-secret --from-literal=azurestorageaccountname=... --from-literal=azurestorageaccountkey=...
 ```
+
+# Registry
+```sh
+az acr build -r cr... -t nginx:alpine .
+```

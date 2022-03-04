@@ -265,78 +265,97 @@ resource "azurerm_role_assignment" "agw" {
   principal_id         = azurerm_kubernetes_cluster.main.addon_profile[0].ingress_application_gateway[0].ingress_application_gateway_identity[0].object_id
 }
 
-resource "null_resource" "get_credentials" {
-  depends_on = [
-    azurerm_kubernetes_cluster_node_pool.main
-  ]
+# resource "null_resource" "get_credentials" {
+#   depends_on = [
+#     azurerm_kubernetes_cluster_node_pool.main
+#   ]
 
-  provisioner "local-exec" {
-    command = "az aks get-credentials --name ${azurerm_kubernetes_cluster.main.name} --resource-group ${azurerm_resource_group.main.name} --context ${local.context_name} --overwrite-existing"
-  }
+#   provisioner "local-exec" {
+#     command = "az aks get-credentials --name ${azurerm_kubernetes_cluster.main.name} --resource-group ${azurerm_resource_group.main.name} --context ${local.context_name} --overwrite-existing"
+#   }
+# }
+
+# resource "null_resource" "convert_kubeconfig" {
+#   depends_on = [
+#     null_resource.get_credentials
+#   ]
+
+#   provisioner "local-exec" {
+#     command = "kubelogin convert-kubeconfig -l azurecli"
+#   }
+# }
+
+# resource "kubernetes_secret_v1" "azure_secret" {
+#   depends_on = [
+#     null_resource.convert_kubeconfig
+#   ]
+
+#   metadata {
+#     name = local.azure_secret_name
+#   }
+
+#   data = {
+#     azurestorageaccountname = azurerm_storage_account.main.name
+#     azurestorageaccountkey  = azurerm_storage_account.main.primary_access_key
+#   }
+# }
+
+# resource "kubernetes_persistent_volume_v1" "azure_file" {
+#   depends_on = [
+#     kubernetes_secret_v1.azure_secret
+#   ]
+
+#   metadata {
+#     name = local.persistent_volume_name
+#   }
+
+#   spec {
+#     capacity = {
+#       storage = "1Ti"
+#     }
+
+#     access_modes                     = ["ReadWriteMany"]
+#     persistent_volume_reclaim_policy = "Retain"
+
+#     persistent_volume_source {
+#       csi {
+#         driver        = "file.csi.azure.com"
+#         read_only     = false
+#         volume_handle = md5(local.persistent_volume_name)
+
+#         volume_attributes = {
+#           resourceGroup = azurerm_resource_group.main.name
+#           shareName     = azurerm_storage_share.main.name
+#         }
+
+#         node_stage_secret_ref {
+#           name      = kubernetes_secret_v1.azure_secret.metadata.0.name
+#           namespace = kubernetes_secret_v1.azure_secret.metadata.0.namespace
+#         }
+#       }
+#     }
+#   }
+# }
+
+resource "azurerm_container_registry" "main" {
+  name                   = "cr${var.project}${var.environment}${var.location}"
+  resource_group_name    = azurerm_resource_group.main.name
+  location               = var.location
+  admin_enabled          = false
+  sku                    = "Basic"
+  anonymous_pull_enabled = false
 }
 
-resource "null_resource" "convert_kubeconfig" {
-  depends_on = [
-    null_resource.get_credentials
-  ]
-
-  provisioner "local-exec" {
-    command = "kubelogin convert-kubeconfig -l azurecli"
-  }
-}
-
-resource "kubernetes_secret_v1" "azure_secret" {
-  depends_on = [
-    null_resource.convert_kubeconfig
-  ]
-
-  metadata {
-    name = local.azure_secret_name
-  }
-
-  data = {
-    azurestorageaccountname = azurerm_storage_account.main.name
-    azurestorageaccountkey  = azurerm_storage_account.main.primary_access_key
-  }
-}
-
-resource "kubernetes_persistent_volume_v1" "azure_file" {
-  depends_on = [
-    kubernetes_secret_v1.azure_secret
-  ]
-
-  metadata {
-    name = local.persistent_volume_name
-  }
-
-  spec {
-    capacity = {
-      storage = "1Ti"
-    }
-
-    access_modes                     = ["ReadWriteMany"]
-    persistent_volume_reclaim_policy = "Retain"
-
-    persistent_volume_source {
-      csi {
-        driver        = "file.csi.azure.com"
-        read_only     = false
-        volume_handle = md5(local.persistent_volume_name)
-
-        volume_attributes = {
-          resourceGroup = azurerm_resource_group.main.name
-          shareName     = azurerm_storage_share.main.name
-        }
-
-        node_stage_secret_ref {
-          name      = kubernetes_secret_v1.azure_secret.metadata.0.name
-          namespace = kubernetes_secret_v1.azure_secret.metadata.0.namespace
-        }
-      }
-    }
-  }
-}
+# resource "azurerm_role_assignment" "aks_acr_pull" {
+#   role_definition_name = "AcrPull"
+#   scope                = azurerm_container_registry.main.id
+#   principal_id         = azurerm_kubernetes_cluster.main.kubelet_identity.0.object_id
+# }
 
 output "disk_id" {
   value = azurerm_managed_disk.main.id
+}
+
+output "registry_name" {
+  value = azurerm_container_registry.main.name
 }
