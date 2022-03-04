@@ -23,7 +23,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v1
       - name: Terraform init
-        run: terraform init
+        run: terraform init -backend-config="client_id=${{ secrets.CLIENT_ID }}" -backend-config="client_secret=${{ secrets.CLIENT_SECRET }} -backend-config="tenant_id=${{ secrets.TENANT_ID }} -backend-config="subscription_id=${{ secrets.SUBSCRIPTION_ID }}"
       - name: Terraform plan
         run: terraform plan -no-color -out=main.tfplan
       - name: Upload artifact
@@ -43,7 +43,7 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v1
       - name: Terraform init
-        run: terraform init
+        run: terraform init -backend-config="client_id=${{ secrets.CLIENT_ID }}" -backend-config="client_secret=${{ secrets.CLIENT_SECRET }} -backend-config="tenant_id=${{ secrets.TENANT_ID }} -backend-config="subscription_id=${{ secrets.SUBSCRIPTION_ID }}"
       - name: Download artifact
         uses: actions/download-artifact@v2
         with:
