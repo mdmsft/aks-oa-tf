@@ -3,12 +3,14 @@ on:
     
 name: Main
 
-permissions:
-  id-token: write
-
 env:
   TF_INPUT: false
   TF_IN_AUTOMATION: true
+  TF_VAR_client_secret: ${{ secrets.CLIENT_SECRET }}
+  TF_VAR_client_id: ${{ secrets.CLIENT_ID }}
+  TF_VAR_tenant_id: ${{ secrets.TENANT_ID }}
+  TF_VAR_subscription_id: ${{ secrets.SUBSCRIPTION_ID }}
+  TF_VAR_principal_id: ${{ secrets.PRINCIPAL_ID }}
 
 jobs:
   plan:
@@ -20,12 +22,6 @@ jobs:
         uses: actions/checkout@v2
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v1
-      - name: Login with service principal
-        uses: azure/login@v1
-        with:
-          client-id: 71d61b9c-20f4-4082-8095-55a701919a61
-          tenant-id: 72f988bf-86f1-41af-91ab-2d7cd011db47
-          subscription-id: 6f3a143b-51cc-4a89-aa5a-3c98bb3f5e46
       - name: Terraform init
         run: terraform init
       - name: Terraform plan
@@ -46,12 +42,6 @@ jobs:
         uses: actions/checkout@v2
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v1
-      - name: Login with service principal
-        uses: azure/login@v1
-        with:
-          client-id: 71d61b9c-20f4-4082-8095-55a701919a61
-          tenant-id: 72f988bf-86f1-41af-91ab-2d7cd011db47
-          subscription-id: 6f3a143b-51cc-4a89-aa5a-3c98bb3f5e46
       - name: Terraform init
         run: terraform init
       - name: Download artifact
